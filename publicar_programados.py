@@ -176,6 +176,10 @@ def publicar(urls, copy):
     return ig_get(mid, "permalink").get("permalink")
 
 def main():
+    faltan = [k for k in ("NOTION_TOKEN", "IG_USER_ID", "IG_TOKEN", "GDRIVE_SA_JSON", "DRIVE_FOLDER_ID") if not os.environ.get(k)]
+    if faltan:
+        log("Publicador sin configurar todavía. Faltan los secretos: " + ", ".join(faltan))
+        return
     filas = programados()
     if not filas:
         log("Nada para publicar.")

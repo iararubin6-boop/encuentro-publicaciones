@@ -175,7 +175,21 @@ def publicar(urls, copy):
     if PRUEBA:
         log("  PRUEBA: carrusel preparado, no se publica.")
         return None
-    mid = ig_post(f"{ig}/media_publish", {"creation_id": cont})["id"]
+    # Instagram a veces dice "no está listo" aunque el contenedor ya terminó (error 9007 / 2207027).
+    # Ese error significa que NO se publicó, así que reintentar es seguro.
+    mid = None
+    for intento in range(8):
+        time.sleep(10)
+        try:
+            mid = ig_post(f"{ig}/media_publish", {"creation_id": cont})["id"]
+            break
+        except RuntimeError as e:
+            if "2207027" in str(e) or '"code":9007' in str(e):
+                log(f"  Instagram todavía no lo tiene listo, reintento {intento + 1}/8")
+                continue
+            raise
+    if not mid:
+        raise RuntimeError("Instagram no dejó publicar después de varios intentos (contenido no listo)")
     return ig_get(mid, "permalink").get("permalink")
 
 def main():

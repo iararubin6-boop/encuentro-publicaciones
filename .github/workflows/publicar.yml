@@ -2,7 +2,7 @@ name: Publicar carruseles programados
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # cada 30 minutos (GitHub puede demorarlo unos minutos)
+    - cron: "*/5 * * * *"    # cada 5 minutos (GitHub puede demorarlo unos minutos)
   workflow_dispatch:
     inputs:
       prueba:

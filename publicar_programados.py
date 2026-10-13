@@ -13,6 +13,7 @@ Modo prueba: PRUEBA=1 hace todo menos publicar y marcar en Notion.
 """
 import io, json, os, re, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 DB = "3f1592dec9a28041bbc7fe1842d0fdd9"          # Ideas Carrusel
 GRAPH = "https://graph.facebook.com/v21.0"
@@ -84,6 +85,8 @@ def drive():
     return build("drive", "v3", credentials=cred, cache_discovery=False)
 
 def bajar_laminas(n, destino):
+    if not os.environ.get("GDRIVE_SA_JSON") or not os.environ.get("DRIVE_FOLDER_ID"):
+        raise RuntimeError(f"no hay láminas del carrusel {n} en el repositorio (carruseles/{n:02d}) y Drive no está configurado")
     from googleapiclient.http import MediaIoBaseDownload
     svc = drive()
     raiz = os.environ["DRIVE_FOLDER_ID"]
@@ -176,7 +179,7 @@ def publicar(urls, copy):
     return ig_get(mid, "permalink").get("permalink")
 
 def main():
-    faltan = [k for k in ("NOTION_TOKEN", "IG_USER_ID", "IG_TOKEN", "GDRIVE_SA_JSON", "DRIVE_FOLDER_ID") if not os.environ.get(k)]
+    faltan = [k for k in ("NOTION_TOKEN", "IG_USER_ID", "IG_TOKEN") if not os.environ.get(k)]  # Drive es opcional
     if faltan:
         log("Publicador sin configurar todavía. Faltan los secretos: " + ", ".join(faltan))
         return
@@ -192,8 +195,13 @@ def main():
             if not f["copy"].strip():
                 raise RuntimeError("falta el texto en «Copy (leyenda)»")
             carpeta = f"carruseles/{n:02d}"
-            nombres = bajar_laminas(n, carpeta)
-            subir_al_repo(n, carpeta)
+            ya = sorted(x.name for x in Path(carpeta).glob(f"c{n:02d}-s*.jpg")) if Path(carpeta).is_dir() else []
+            if ya:
+                nombres = ya
+                log(f"  {len(ya)} láminas tomadas del repositorio")
+            else:
+                nombres = bajar_laminas(n, carpeta)
+                subir_al_repo(n, carpeta)
             urls = [f"https://raw.githubusercontent.com/{REPO}/{RAMA}/{carpeta}/{x}" for x in nombres]
             esperar_publicas(urls)
             link = publicar(urls, f["copy"])

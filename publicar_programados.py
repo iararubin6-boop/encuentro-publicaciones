@@ -165,8 +165,13 @@ def esperar_contenedor(cid, vueltas=60):
 def publicar(urls, copy):
     ig = os.environ["IG_USER_ID"]
     if len(urls) == 1 and urls[0].endswith(".mp4"):  # reel: un solo video en la carpeta
-        cont = ig_post(f"{ig}/media", {"media_type": "REELS", "video_url": urls[0], "caption": copy, "share_to_feed": "true"})["id"]
-        log("  reel cargado, Instagram lo está procesando")
+        # Se sube el archivo directo a Instagram (subida reanudable): GitHub entrega los .mp4 sin tipo de video.
+        cont = ig_post(f"{ig}/media", {"media_type": "REELS", "upload_type": "resumable", "caption": copy, "share_to_feed": "true"})["id"]
+        datos = Path(urls[0].split(f"/{RAMA}/", 1)[1]).read_bytes()
+        req = urllib.request.Request(f"https://rupload.facebook.com/ig-api-upload/v21.0/{cont}", data=datos, method="POST", headers={
+            "Authorization": f"OAuth {os.environ['IG_TOKEN']}", "offset": "0", "file_size": str(len(datos))})
+        with urllib.request.urlopen(req, timeout=300) as r:
+            log("  reel subido a Instagram:", r.read().decode()[:120])
         esperar_contenedor(cont, 200)
         return publicar_contenedor(ig, cont)
     hijos = []
@@ -227,7 +232,8 @@ def main():
                 nombres = bajar_laminas(n, carpeta)
                 subir_al_repo(n, carpeta)
             urls = [f"https://raw.githubusercontent.com/{REPO}/{RAMA}/{carpeta}/{x}" for x in nombres]
-            esperar_publicas(urls)
+            if not urls[0].endswith(".mp4"):
+                esperar_publicas(urls)
             link = publicar(urls, f["copy"])
             if link:
                 marcar_publicado(f["id"], link)

@@ -152,8 +152,8 @@ def ig_post(ruta, datos):
 def ig_get(ruta, campos):
     return pedir(f"{GRAPH}/{ruta}?" + urllib.parse.urlencode({"fields": campos, "access_token": os.environ["IG_TOKEN"]}))
 
-def esperar_contenedor(cid):
-    for _ in range(60):
+def esperar_contenedor(cid, vueltas=60):
+    for _ in range(vueltas):
         estado = ig_get(cid, "status_code").get("status_code")
         if estado == "FINISHED":
             return
@@ -164,6 +164,11 @@ def esperar_contenedor(cid):
 
 def publicar(urls, copy):
     ig = os.environ["IG_USER_ID"]
+    if len(urls) == 1 and urls[0].endswith(".mp4"):  # reel: un solo video en la carpeta
+        cont = ig_post(f"{ig}/media", {"media_type": "REELS", "video_url": urls[0], "caption": copy, "share_to_feed": "true"})["id"]
+        log("  reel cargado, Instagram lo está procesando")
+        esperar_contenedor(cont, 200)
+        return publicar_contenedor(ig, cont)
     hijos = []
     for u in urls:
         hijos.append(ig_post(f"{ig}/media", {"image_url": u, "is_carousel_item": "true"})["id"])
@@ -172,8 +177,11 @@ def publicar(urls, copy):
         esperar_contenedor(h)
     cont = ig_post(f"{ig}/media", {"media_type": "CAROUSEL", "children": ",".join(hijos), "caption": copy})["id"]
     esperar_contenedor(cont)
+    return publicar_contenedor(ig, cont)
+
+def publicar_contenedor(ig, cont):
     if PRUEBA:
-        log("  PRUEBA: carrusel preparado, no se publica.")
+        log("  PRUEBA: publicación preparada, no se publica.")
         return None
     # Instagram a veces dice "no está listo" aunque el contenedor ya terminó (error 9007 / 2207027).
     # Ese error significa que NO se publicó, así que reintentar es seguro.
@@ -210,6 +218,8 @@ def main():
                 raise RuntimeError("falta el texto en «Copy (leyenda)»")
             carpeta = f"carruseles/{n:02d}"
             ya = sorted(x.name for x in Path(carpeta).glob(f"c{n:02d}-s*.jpg")) if Path(carpeta).is_dir() else []
+            if Path(carpeta).is_dir() and not ya:
+                ya = sorted(x.name for x in Path(carpeta).glob("*.mp4"))[:1]  # reel
             if ya:
                 nombres = ya
                 log(f"  {len(ya)} láminas tomadas del repositorio")
